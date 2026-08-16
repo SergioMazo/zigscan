@@ -4,14 +4,14 @@
 #
 # One entry point so a technician has one thing to remember.
 #
-#   ./zigscan survey             abre la consola (la normal)
-#   ./zigscan scan [seg]         barre los 16 canales desde la terminal
-#   ./zigscan census             quién ya está en el aire, y de qué marca
-#   ./zigscan verdict            ¿interferencia o malla? se lee de una captura
-#   ./zigscan wifi               Wi-Fi medido, todas las bandas
-#   ./zigscan identify           qué antena hay y con qué firmware
-#   ./zigscan capture <ch> <s>   graba un canal a pcap
-#   ./zigscan report <file>      tramas y RSSI de un pcap
+#   ./zigscan survey             open the local web console
+#   ./zigscan scan [seconds]     sweep all 16 channels from the terminal
+#   ./zigscan census             identify networks and vendor evidence
+#   ./zigscan verdict            distinguish interference from a mesh problem
+#   ./zigscan wifi               measure Wi-Fi across all bands
+#   ./zigscan identify           identify the radio and its firmware
+#   ./zigscan capture <ch> <s>   record one channel to a PCAP
+#   ./zigscan report <file>      summarize frames and RSSI from a PCAP
 
 set -euo pipefail
 
