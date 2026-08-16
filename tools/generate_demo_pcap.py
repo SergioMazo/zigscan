@@ -2,8 +2,10 @@
 """Generate the public ZigScan demo PCAP without using captured RF traffic.
 
 The frames are deterministic synthetic IEEE 802.15.4 data. PAN identifiers,
-locally administered EUI-64 values and encrypted-looking payload bytes are
-generated from a fixed demo seed and have no relationship to a real network.
+device-specific EUI-64 bytes and encrypted-looking payload bytes are generated
+from a fixed demo seed and have no relationship to a real network. One EUI-64
+uses Control4's public 00:0f:ff OUI so the public sample demonstrates ZigScan's
+vendor-detection path without copying an identity from real hardware.
 """
 
 from __future__ import annotations
@@ -40,6 +42,13 @@ def local_eui(rng: random.Random) -> bytes:
     return bytes(value)
 
 
+def eui_with_public_oui(rng: random.Random, oui: bytes) -> bytes:
+    """Synthetic EUI-64 using a public vendor OUI and random device bytes."""
+    if len(oui) != 3:
+        raise ValueError("an OUI must contain exactly three bytes")
+    return oui + bytes(rng.getrandbits(8) for _ in range(5))
+
+
 def rpi_record(packet: bytes, rssi: int, index: int) -> bytes:
     """Wrap one frame in the 20-byte CatSniffer Radio Packet Info header."""
     header = bytearray(20)
@@ -56,7 +65,7 @@ def rpi_record(packet: bytes, rssi: int, index: int) -> bytes:
 def build_frames() -> list[tuple[bytes, int]]:
     rng = random.Random(DEMO_SEED)
     pan = rng.randrange(1, 0xFFFF)
-    coordinator = local_eui(rng)
+    coordinator = eui_with_public_oui(rng, bytes.fromhex("000fff"))
     device = local_eui(rng)
     ext_pan = local_eui(rng)
     synthetic_ciphertext = bytes(rng.getrandbits(8) for _ in range(24))

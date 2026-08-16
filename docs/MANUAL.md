@@ -1,239 +1,249 @@
-# Manual de zigscan
+# ZigScan Manual
 
-Para el técnico que la va a usar en sitio. Si solo querés el resumen de campo,
-está en [FIELD-GUIDE.md](FIELD-GUIDE.md) y cabe en una página.
-
----
-
-## 1. Qué hace y qué no
-
-zigscan contesta una pregunta: **¿en qué canal Zigbee conviene dejar este
-sistema, en esta casa?** Y contesta una segunda cuando ya hay un problema:
-**¿las luces van lentas por interferencia o por la malla?**
-
-Lo hace escuchando. La antena nunca transmite, así que se puede correr dentro
-del sistema vivo de un cliente sin tocarlo.
-
-**Lo que no ve.** Escucha 802.15.4, que es Zigbee. No ve Wi-Fi (eso lo mide
-aparte con la tarjeta de la laptop), no ve Bluetooth, no ve Lutron Clear Connect
-Type X, y no ve nada fuera de 2.4 GHz. Un canal con cero tramas significa *acá no
-hay Zigbee*, **nunca** *acá no hay interferencia*. Está todo detallado en
-[RF-BANDS.md](RF-BANDS.md) y conviene leerlo una vez antes de la primera visita.
+For the technician who will use it on site. If you only need the field summary,
+see [FIELD-GUIDE.md](FIELD-GUIDE.md); it fits on one page.
 
 ---
 
-## 2. Qué necesitás
+## 1. What it does — and what it does not
+
+ZigScan answers one question: **which Zigbee channel should this system use in
+this building?** It answers a second question when there is already a problem:
+**are the lights responding slowly because of interference or because of the
+mesh?**
+
+It answers by listening. **The radio never transmits**, so ZigScan can run next
+to a live customer system without touching it. ZigScan does not join, pair,
+inject or transmit into the Zigbee network. The CatSniffer operates as a passive
+receiver during surveys and captures.
+
+**What it cannot see.** The radio listens to 802.15.4, which covers Zigbee. It
+does not see Wi-Fi directly (ZigScan measures that separately with the laptop's
+Wi-Fi card), Bluetooth, Lutron Clear Connect Type X, or anything outside
+2.4 GHz. A channel with zero frames means *there is no Zigbee traffic here*;
+it never means *there is no interference here*. The complete limits are in
+[RF-BANDS.md](RF-BANDS.md). Read it once before the first site visit.
+
+---
+
+## 2. What you need
 
 | | |
 |---|---|
-| Antena | Electronic Cats CatSniffer v3.x |
-| Antena de 2.4 GHz | Enroscada en el SMA. Sin ella, todo se ve limpio y el reporte sale mal. |
-| Firmware | TI sniffer en el CC1352P7 — ver §3, **la antena no viene lista de fábrica** |
-| Laptop | macOS (hoy). Para Windows ver [HARDWARE-OPTIONS.md](HARDWARE-OPTIONS.md). |
+| Radio | Electronic Cats CatSniffer v3.x |
+| 2.4 GHz antenna | Attached to the SMA connector. Without it, every channel looks clean and the report is misleading. |
+| Firmware | TI sniffer firmware on the CC1352P7 — see section 3. **A new radio is not ready out of the box.** |
+| Laptop | macOS today. For Windows, see [HARDWARE-OPTIONS.md](HARDWARE-OPTIONS.md). |
 
 ---
 
-## 3. El firmware: la antena no llega lista
+## 3. Firmware: a new radio is not ready out of the box
 
-Un CatSniffer nuevo **no trae el firmware de sniffer**. Hay que ponérselo, y son
-dos etapas porque son dos chips:
+A new CatSniffer **does not ship with the sniffer firmware installed**. It needs
+two flashing stages because the board contains two chips:
 
-1. **RP2040** (el que habla USB) necesita `SerialPassthroughwithboot`. Se pone
-   arrastrando un archivo: doble clic rápido al botón `reset1`, aparece un disco
-   llamado `RPI-RP2`, se copia el `.uf2` adentro y la placa se reinicia sola.
-2. **CC1352P7** (la radio) necesita `sniffer_fw`. Esto va por serie, con
+1. **RP2040** (the USB interface) needs `SerialPassthroughwithboot`. This stage
+   uses drag and drop: double-click the `reset1` button quickly, wait for a drive
+   named `RPI-RP2`, copy the `.uf2` file to it, and let the board restart.
+2. **CC1352P7** (the radio) needs `sniffer_fw`. This stage runs over serial with
    `catnip_uploader`.
 
-**Verificá antes de asumir:**
+**Verify instead of assuming:**
 
 ```bash
 ./zigscan identify
 ```
 
-Si dice `TI sniffer firmware — answered the @S ping live`, está lista. Si dice
-`coordinator` o `unknown`, falta flashearla.
+If it reports `TI sniffer firmware — answered the @S ping live`, the radio is
+ready. If it reports `coordinator` or `unknown`, the sniffer firmware is missing.
 
-### Tres advertencias que cuestan dinero
+### Three warnings that can prevent an expensive mistake
 
-**No llames a `cc2538-bsl` a mano.** El bootloader del CC1352 en esta placa no se
-abre con un flag: el sketch del RP2040 escucha una cadena mágica (`<boot>`) a
-921600 baudios y maneja los pines él mismo. `catnip_uploader` hace la secuencia
-completa. Inventarse el handshake es como se brickea la radio — ya pasó una vez
-en este proyecto.
+**Do not call `cc2538-bsl` manually.** The CC1352 bootloader on this board does
+not open through a simple flag. The RP2040 sketch listens for a magic string
+(`<boot>`) at 921600 baud and controls the pins itself. `catnip_uploader` performs
+the complete sequence. Inventing a different handshake is how the radio can be
+bricked; it already happened once during this project.
 
-**La etapa 1 tiene que estar primero.** Cualquier otro sketch en el RP2040 ignora
-la cadena mágica, y entonces el flasheo de la radio no encuentra bootloader.
+**Stage 1 must come first.** Any other RP2040 sketch ignores the magic string,
+so the radio flashing process cannot find the bootloader.
 
-**El firmware de sniffer es una puerta de un solo sentido.** Flashear *hacia*
-sniffer funciona. Flashear *desde* sniffer por serie **no**: `cc2538-bsl` nunca
-sincroniza, porque la build de TI deja la ROM en un estado del que no se sale por
-UART. Volver atrás requiere SWD y una sonda. Por eso zigscan nunca flashea solo,
-ni siquiera cuando detecta el firmware equivocado: te avisa y te deja decidir.
+**The sniffer firmware is a one-way door over serial.** Flashing *to* the
+sniffer works. Flashing *from* the sniffer over serial does **not**:
+`cc2538-bsl` never synchronizes because the TI build leaves the ROM in a state
+that cannot exit through UART. Returning to coordinator firmware requires SWD
+and a probe. That is why ZigScan never flashes firmware automatically, even
+when it detects the wrong image: it reports the state and leaves the decision
+to you.
 
-Si la antena que vas a usar también es el coordinador de una instalación,
-**no la flashees**. Comprá una segunda.
+If the radio is also the coordinator of an installation, **do not flash it**.
+Buy a second unit.
 
 ---
 
-## 4. Instalación
+## 4. Installation
 
-### Para técnicos: el .dmg
+### For technicians: the DMG
 
-1. Abrí `zigscan.dmg` y arrastrá **zigscan** a Aplicaciones.
-2. **La primera vez, clic derecho sobre la app → Abrir**, y confirmá. Doble clic
-   no funciona la primera vez y no está roto: macOS bloquea aplicaciones sin
-   firmar de Apple. Es una sola vez.
-3. La app levanta el servicio y abre tu navegador por defecto sola.
+1. Open `zigscan.dmg` and drag **ZigScan** to Applications.
+2. **On the first launch, right-click the app, select Open, and confirm.** A
+   normal double-click may be blocked the first time because the current DMG is
+   not notarized by Apple. This is required only once.
+3. The app starts the local service and opens your default browser.
 
-No hay nada más que instalar. No necesita Python, ni Homebrew, ni permisos de
-administrador, y una vez instalada trabaja sin internet — que es el punto,
-porque en obra no hay red confiable y pedir la clave del cliente para hacer un
-survey queda mal.
+There is nothing else to install. The app does not require Python, Homebrew, or
+administrator access. Once installed, it works without internet access. That
+matters on job sites, where connectivity is unreliable and asking for the
+customer's Wi-Fi password just to run a survey is poor practice.
 
-**Tus capturas quedan en `~/Documents/zigscan/captures`**, no dentro de la
-aplicación. Sobreviven si actualizás o borrás la app, y las podés adjuntar al
-expediente del trabajo desde Finder.
+**Your captures are stored in `~/Documents/zigscan/captures`**, outside the
+application. They remain available if you update or delete the app, and you can
+attach them to the job record directly from Finder.
 
-Para cerrar el servicio, salí de la app (Cmd-Q) como con cualquier otra.
+To stop the service, quit the app with Cmd-Q like any other macOS application.
 
-### Para el que quiera el código
+### For source-code users
 
 ```bash
-git clone https://github.com/<owner>/zigscan.git
+git clone https://github.com/SergioMazo/zigscan.git
 cd zigscan
 ./setup.sh
 ```
 
-`setup.sh` crea el entorno, baja el toolchain de Electronic Cats en un commit
-fijo, e instala lo que hace falta. No toca el firmware. Con eso quedan
-disponibles los comandos de terminal de la §5.
+`setup.sh` creates the environment, downloads the Electronic Cats toolchain at
+a pinned commit, and installs the required dependencies. It does not touch the
+radio firmware. The terminal commands in section 5 are then available.
 
 ---
 
-## 5. Uso
+## 5. Usage
 
-### La consola
+### The console
 
 ```bash
 ./zigscan survey
 ```
 
-Abre `http://127.0.0.1:8477`. Todo es local; no se sube nada a ningún lado.
+This opens `http://127.0.0.1:8477`. Everything runs locally; no data is uploaded.
 
-Arriba a la derecha, el punto verde y el nombre del puerto confirman que la
-antena está viva. Si el punto está rojo, no hay antena — revisá el cable y que
-ninguna máquina virtual la haya secuestrado (Parallels lo hace solo).
+In the upper-right corner, a green dot and the serial-port name confirm that the
+radio is available. If the dot is red, the radio is missing. Check the cable and
+make sure a virtual machine has not captured the USB device; Parallels can do
+this automatically.
 
-El botón **ES / EN** cambia el idioma y se recuerda.
+The **ES / EN** control changes the application language and remembers the
+selection.
 
-Cada panel tiene un **`?`**: ahí está qué mide ese panel, qué **no** puede ver, y
-qué hacer con el resultado. Si dudás de un número, ese es el primer lugar.
+Every panel has a **`?`** explaining what it measures, what it **cannot** see,
+and how to act on the result. If a number is unclear, start there.
 
-### Modo Campo
+### Field mode
 
-El número grande arriba es la respuesta: **el canal que hay que usar**. Debajo
-dice por qué.
+The large number at the top is the operational answer: **the channel to use**.
+The sentence below explains why.
 
-- **Ocupación de 2.4 GHz** — cada barra es un canal; la altura son las tramas
-  escuchadas. Las bandas moradas son el Wi-Fi real de la casa. Las barras
-  punteadas son canales **sin medir**, que no es lo mismo que limpios.
-- **Quién ya está en el aire** — las redes que ya funcionan ahí, con marca cuando
-  se puede leer.
-- **Wi-Fi en sitio** — las tres bandas. Solo 2.4 GHz le compite a Zigbee; 5 y 6
-  van porque el mismo técnico suele estar instalando el Wi-Fi.
-- **Diagnóstico** — interferencia contra malla.
-- **Cómo leer la señal** — qué significa cada dBm en términos de distancia.
+- **2.4 GHz occupancy** — each bar is a channel; its height represents the
+  frames received. Purple bands show the building's measured Wi-Fi. Dotted bars
+  are **unmeasured** channels, which is not the same as clean channels.
+- **Who is already on the air** — networks already operating at the site, with
+  vendor evidence when it can be read.
+- **Wi-Fi on site** — all three Wi-Fi bands. Only 2.4 GHz competes with Zigbee;
+  5 and 6 GHz are included because the same technician often installs the Wi-Fi.
+- **Diagnosis** — interference versus a mesh problem.
+- **How to read signal** — what each dBm range means in practical distance.
 
-### Modo Análisis
+### Analysis mode
 
-Para cuando querés ver debajo del resultado: capturar un canal concreto, leer las
-tramas decodificadas, o llevarte el `.pcap` a Wireshark.
+Use Analysis when you need to look below the answer: capture one channel,
+inspect decoded frames, or take the raw `.pcap` into Wireshark.
 
-### Desde la terminal
+### From the terminal
 
 ```bash
-./zigscan scan 6          # barre los 16 canales, 6 s cada uno (~2 min)
-./zigscan census          # quién está en el aire
-./zigscan verdict         # interferencia o malla
-./zigscan wifi            # Wi-Fi medido, todas las bandas
-./zigscan capture 15 60   # graba el canal 15 durante 60 s
-./zigscan identify        # qué antena hay y con qué firmware
+./zigscan scan 6          # sweep all 16 channels, 6 s each (~2 min)
+./zigscan census          # show who is already on the air
+./zigscan verdict         # distinguish interference from a mesh problem
+./zigscan wifi            # measure Wi-Fi across all bands
+./zigscan capture 15 60   # record channel 15 for 60 seconds
+./zigscan identify        # identify the radio and its firmware
 ```
 
 ---
 
-## 6. Cómo leer los resultados
+## 6. Reading the results
 
-### El canal recomendado
+### Recommended channel
 
-Sale de los canales **15, 20, 25 y 26**, que son los cuatro que caen en los
-huecos que deja el Wi-Fi 1 / 6 / 11. Entre esos, gana el que tenga menos Wi-Fi
-encima, después el que no tenga una red conocida, y después el más tranquilo.
+The recommendation considers channels **15, 20, 25 and 26**, which fall in the
+gaps around Wi-Fi channels 1, 6 and 11. Among those candidates, ZigScan first
+prefers the channel with the least Wi-Fi overlap, then one without a known
+network, and then the quietest remaining option.
 
-zigscan **no recomienda un canal que no midió**. Si ves "sin barrido", es que
-todavía no hay datos, no que esté todo limpio.
+ZigScan **never recommends a channel it did not measure**. If you see
+"not swept," there is no survey data yet; it does not mean the channel is clean.
 
-### La señal
+### Signal
 
-| Lectura | Significa |
+| Reading | Meaning |
 |---|---|
-| −45 dBm | Está en esta casa, cerca del punto de medición |
-| −62 dBm | Dentro de la casa, a distancia normal de trabajo |
-| −78 dBm | Lejos, otra planta, o del vecino. Poco confiable |
-| −92 dBm | Al límite de lo audible. Casi seguro no es de esta instalación |
+| −45 dBm | Inside this building, close to the measurement point |
+| −62 dBm | Inside the building, at a normal working distance |
+| −78 dBm | Far away, on another floor, or at a neighboring property; not reliable |
+| −92 dBm | At the edge of audibility; almost certainly not part of this installation |
 
-Sirve sobre todo para descartar: si una red aparece a −90, probablemente no es
-problema del cliente.
+RSSI is especially useful for excluding unrelated networks. If a network
+appears at −90 dBm, it is probably not the customer's problem.
 
-### El diagnóstico
+### Diagnosis
 
-| Dice | Qué hacer |
+| Result | What to do |
 |---|---|
-| **Interferencia** | Mover la red a un canal limpio. |
-| **No es RF, es la malla** | Cambiar de canal no arregla nada. Mirá distancia, repetidores, ruteo, equipos con corriente. |
-| **Al límite** | Funciona sin margen. Arreglalo antes de que agreguen más equipos. |
-| **El RF está sano** | El aire no es el problema. Revisá hub, integración, automatizaciones. |
-| **No hay tráfico suficiente** | Capturá más tiempo, o en el horario del que se queja el cliente. |
+| **Interference** | Move the network to a clean channel. |
+| **Not RF — the mesh** | Changing channels will not fix it. Check distance, repeaters, routing, and powered devices. |
+| **Marginal** | It works without headroom. Fix it before more devices are added. |
+| **RF is healthy** | The air is not the problem. Check the hub, integration, and automations. |
+| **Not enough traffic** | Capture for longer or during the period when the customer reports the problem. |
 
-El cuarto caso vale tanto como los otros: **probar que el RF no es el problema**
-es lo que evita perder un día persiguiéndolo.
+The fourth result is as valuable as the others: **proving that RF is not the
+problem** prevents an entire day from being spent chasing it.
 
-### Permit-join abierto
+### Open permit-join
 
-Si una red aparece con esa etiqueta roja, está aceptando equipos nuevos de
-cualquiera en rango. Es un hallazgo de seguridad y conviene decírselo al cliente.
+If a network has this red label, it is accepting new devices from anyone within
+range. Treat it as a security finding and inform the customer.
 
 ---
 
-## 7. Cuando algo no cuadra
+## 7. Troubleshooting
 
-**No aparece la antena.** Revisá que ninguna VM la tenga tomada — Parallels la
-reclama sola en cuanto arranca una máquina, y entonces macOS ni siquiera crea el
-puerto. `./zigscan identify` te dice quién la tiene.
+**The radio does not appear.** Make sure no virtual machine has claimed it.
+Parallels can capture the device as soon as a VM starts, preventing macOS from
+creating the serial port. `./zigscan identify` reports what it can see.
 
-**El barrido da cero en todos los canales.** En orden de probabilidad:
+**The sweep reports zero on every channel.** Check these causes in order:
 
-1. La antena de 2.4 GHz no está enroscada.
-2. La red está en reposo. Zigbee callado es normal — pedí que prendan y apaguen
-   una luz mientras barrés, o subí el tiempo por canal a 15 segundos.
-3. El firmware no es el de sniffer (`./zigscan identify`).
+1. The 2.4 GHz antenna is not attached.
+2. The network is idle. Quiet Zigbee traffic is normal. Ask someone to switch a
+   light on and off during the sweep, or increase the time per channel to
+   15 seconds.
+3. The radio does not have the sniffer firmware (`./zigscan identify`).
 
-**El censo no muestra la marca.** Es lo esperable en una red ya formada: todo va
-con direcciones cortas de 16 bits, que no llevan fabricante. La marca solo se ve
-cuando un equipo se une a la red. Si necesitás identificarla, capturá mientras
-emparejan algo.
+**The census does not show a vendor.** This is expected on an established
+network: normal traffic uses 16-bit short addresses, which do not carry a
+manufacturer identifier. Vendor evidence is visible when a device joins. If
+you need it, capture while a device is being paired.
 
-**Una red aparece y desaparece entre barridos.** Normal si está al límite de la
-señal. Mirá el dBm antes de reportarla.
+**A network appears and disappears between sweeps.** This is normal when it is
+near the edge of the signal range. Check its dBm value before reporting it.
 
 ---
 
-## 8. Guardar el trabajo
+## 8. Saving the job record
 
-Las capturas quedan en `captures/`, con fecha. Guardalas junto al expediente del
-trabajo: cuando dentro de seis meses el cliente diga que "siempre anduvo mal",
-tenés la medición del día de la instalación.
+CLI captures are stored in `captures/` with timestamps. Keep them with the job
+record. If a customer says six months later that the installation has "always
+been slow," you will have the measurement from installation day.
 
-Ojo con la privacidad: un `.pcap` contiene tráfico de la red del cliente, y una
-captura tomada durante un emparejamiento incluye el intercambio de llaves. No los
-publiques ni los mandes fuera sin pensarlo.
+Treat captures as sensitive data. A `.pcap` contains customer network traffic,
+and a capture made during pairing can include a key exchange. Do not publish or
+share captures outside the job without deliberate review and authorization.

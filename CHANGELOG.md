@@ -1,13 +1,24 @@
 # Changelog
 
-## 0.3.0 — unreleased
+## 0.3.1 — 2026-08-15
+
+**Fixed**
+- All public repository documentation is now consistently written in English.
+  The ES/EN selector remains available inside the application.
+- The synthetic demo capture now includes an extended address built from
+  Control4's public `00:0f:ff` OUI and deterministic fictional device bytes.
+  Census can demonstrate vendor detection without distributing a real device
+  identity, network key, or over-the-air capture.
+- The source installation command in the manual now points to
+  `https://github.com/SergioMazo/zigscan.git`.
+
+## 0.3.0 — 2026-08-15
 
 A macOS app a technician can install, and the capture rework that made it
 possible.
 
 **Added**
-- A dedicated ZigScan application icon, used by the macOS bundle and both
-  README files.
+- A dedicated ZigScan application icon, used by the macOS bundle and README.
 - `zigscan.app` and `zigscan.dmg`, built by `./build-macos.sh`. The app starts
   the console and opens the technician's own default browser. No Python, no
   Homebrew, no admin rights.
@@ -136,8 +147,8 @@ analyser cannot, and a UI rebuilt in Aurora's identity.
 
 **Changed**
 - The UI moved out of a Python string into `tools/page.html` and was rebuilt on
-  auroraproject.ai's design language. Two modes: **Campo** for the technician
-  who wants a channel number, **Análisis** for frames and captures.
+  auroraproject.ai's design language. Two modes: **Field** for the technician
+  who wants a channel number, **Analysis** for frames and captures.
 
 **Fixed**
 - CSS class collision: the top bar and the chart bars both used `.bar`, so the

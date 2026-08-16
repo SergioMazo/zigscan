@@ -1,56 +1,61 @@
-# Qué ve esta herramienta, y qué no
+# What ZigScan can see — and what it cannot
 
-La regla, en una línea: **zigscan escucha 802.15.4 en 2.4 GHz.** Nada más.
+The rule in one sentence: **ZigScan listens to 802.15.4 at 2.4 GHz.** Nothing
+else is received by the Zigbee capture path.
 
-Eso cubre Zigbee completo, deja fuera bandas enteras, y — lo más peligroso — deja
-fuera sistemas que **sí están en 2.4 GHz** pero hablan otro idioma de radio. Un
-canal que esta herramienta reporta vacío puede estar lleno. Vale la pena
-entender exactamente dónde está el límite antes de darle un número a un cliente.
+That covers Zigbee, excludes entire frequency bands, and—most importantly—also
+excludes systems that **use 2.4 GHz** but speak a different radio protocol. A
+channel that looks empty in ZigScan can still contain other RF energy. Understand
+this boundary before presenting a channel recommendation to a customer.
 
-## Por marca
+## By system or vendor
 
-| Sistema | Banda | ¿Lo ve zigscan? |
+| System | Band | Can ZigScan see it? |
 |---|---|---|
-| **Control4** | Zigbee, 2.4 GHz | **Sí, completo.** Beacons, equipos y marca por OUI. Confirmado en banco. |
-| **SONOFF / ITead** | Zigbee, 2.4 GHz | **Sí, completo.** Confirmado en banco. |
-| **Philips Hue, Aqara, SmartThings** | Zigbee, 2.4 GHz | Sí. OUI en la tabla, pendiente de confirmar en campo. |
-| **Crestron infiNET EX** | 2.4 GHz, sobre 802.15.4 | **Parcial.** Comparte PHY y MAC con Zigbee, así que sus tramas se cuentan y ocupan el canal, pero sin payload Zigbee no se identifica como red. Aparece como "no es Zigbee". *Sin confirmar contra hardware.* |
-| **Lutron RadioRA 2, QS, Caséta** (Clear Connect Type A) | ~434 MHz | **No.** Otra banda. No compite con Zigbee ni aparece acá. |
-| **Lutron RadioRA 3, HomeWorks QSX** (Clear Connect Type X) | **2.4 GHz** | **No, y este es el punto ciego importante.** Ocupa el mismo aire que Zigbee pero con PHY propietaria, así que no genera tramas 802.15.4 que contar. El canal se ve limpio y no lo está. *Verificar antes de apoyarse en esto.* |
-| **Vantage** (RadioLink) | sub-GHz | **No.** Otra banda. |
-| **Savant** | según línea; parte usa Zigbee | Depende del equipo. *Sin confirmar.* |
+| **Control4** | Zigbee, 2.4 GHz | **Yes, when 802.15.4 frames are received.** Beacons, device addresses, and public OUI evidence are decoded. Observed on real hardware. |
+| **SONOFF / ITead** | Zigbee, 2.4 GHz | **Yes, when 802.15.4 frames are received.** Observed on real hardware. |
+| **Philips Hue, Aqara, SmartThings** | Zigbee, 2.4 GHz | Public OUIs are present in the lookup table, but direct field confirmation is still required. |
+| **Crestron infiNET EX** | 2.4 GHz over 802.15.4 | **Potentially partial.** It shares the 802.15.4 PHY and MAC, so compatible received frames may occupy the channel count, but a non-Zigbee payload will not be identified as a Zigbee network. Not verified against physical hardware. |
+| **Lutron RadioRA 2, QS, Caséta** (Clear Connect Type A) | ~434 MHz | **No.** Different frequency band. It does not compete with Zigbee and cannot appear in a 2.4 GHz Zigbee capture. |
+| **Lutron RadioRA 3, HomeWorks QSX** (Clear Connect Type X) | **2.4 GHz** | **No, and this is an important blind spot.** It occupies the same RF band but uses a proprietary PHY, so it does not produce 802.15.4 frames for ZigScan to count. Verify this boundary independently before relying on it in the field. |
+| **Vantage RadioLink** | Sub-GHz | **No.** Different frequency band. |
+| **Savant** | Depends on product line; some products use Zigbee | Depends on the specific hardware. Not verified. |
 
-Las filas marcadas *sin confirmar* vienen de documentación pública, no de haberlas
-medido en este banco. Confirmalas antes de usarlas como argumento con un cliente
-— y cuando lo hagas, actualizá esta tabla y `OUI_VENDORS` en `tools/census.py`.
+Rows marked as unverified come from publicly available technical information,
+not direct measurements on this bench. Confirm them before using them in a
+customer-facing conclusion. When direct evidence becomes available, update this
+table and `OUI_VENDORS` in `tools/census.py` with the exact tested hardware and
+firmware revision.
 
-## Los tres puntos ciegos
+## Three blind spots
 
-**Wi-Fi.** No genera tramas 802.15.4, así que el contador no lo ve. Por eso
-zigscan lo mide aparte, con la tarjeta de la laptop, y lo dibuja sobre el
-espectro. Es el único punto ciego que la herramienta ya tapa.
+**Wi-Fi.** Wi-Fi does not generate 802.15.4 frames, so the Zigbee frame counter
+cannot see it. ZigScan measures Wi-Fi separately with the laptop's Wi-Fi card
+and overlays the observed channels on the spectrum chart. This is the one blind
+spot the current tool already addresses directly.
 
-**Otras PHY en 2.4 GHz.** Clear Connect Type X, Bluetooth, ZigBee propietario de
-algún fabricante, video senders, microondas. Ocupan aire y no producen nada que
-contar. Un canal con cero tramas significa *no hay 802.15.4 acá*, nunca *no hay
-interferencia acá*.
+**Other PHYs at 2.4 GHz.** Clear Connect Type X, Bluetooth, proprietary 2.4 GHz
+systems, video senders, and microwave ovens can occupy the band without
+producing an 802.15.4 frame. Zero received frames means *no 802.15.4 traffic was
+heard here*; it never means *there is no interference here*.
 
-**El silencio de Zigbee.** Una red Zigbee en reposo casi no habla. Los routers
-mandan link status cada ~15 s y poco más; los beacons solo aparecen cuando
-alguien hace un beacon request. Un barrido de 6 s por canal puede pasar por
-encima de una red real sin oírla. Si el resultado importa, barré más tiempo o
-pedí que muevan una luz mientras medís.
+**Quiet Zigbee networks.** An idle Zigbee network may transmit very little.
+Routers send link-status traffic approximately every 15 seconds, and beacons
+normally appear in response to a beacon request. A six-second sweep can pass
+over a real network without hearing it. When the result matters, listen longer
+or ask someone to operate a light while you measure.
 
-## Lo que se puede hacer al respecto
+## Possible future work
 
-Dos caminos, los dos abiertos con el hardware que ya tenés:
+Two paths are technically interesting with the existing hardware, but neither
+is a current compatibility claim:
 
-**Energy detect.** El CC1352P7 mide potencia en un canal sin importar qué
-protocolo la produce. Un barrido de energía taparía los tres puntos ciegos de
-arriba a la vez — es la diferencia entre "no hay Zigbee" y "no hay nada". Falta
-verificar si pycatsniffer expone esa función.
+**Energy detection.** The CC1352P7 can measure channel power regardless of the
+protocol producing it. An energy sweep could distinguish "no Zigbee frames"
+from "no RF energy," but ZigScan has not yet validated whether the current
+`pycatsniffer` path exposes the required function.
 
-**Sub-GHz.** El CatSniffer v3.x trae un SX1262 además del CC1352P7. Ese chip
-cubre 433/868/915 MHz, que es donde viven Lutron Clear Connect Type A y Vantage.
-Un modo sub-GHz convertiría esto en una herramienta que cubre casi todo el
-parque instalado, no solo el Zigbee.
+**Sub-GHz.** The CatSniffer v3.x includes an SX1262 alongside the CC1352P7. The
+chip covers 433/868/915 MHz, but ZigScan does not currently implement or claim a
+tested sub-GHz survey mode. Any future mode must be verified on physical
+hardware before the documentation lists supported systems.

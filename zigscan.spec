@@ -88,8 +88,8 @@ app = BUNDLE(
     info_plist={
         "CFBundleName": "zigscan",
         "CFBundleDisplayName": "zigscan",
-        "CFBundleShortVersionString": "0.3.0",
-        "CFBundleVersion": "0.3.0",
+        "CFBundleShortVersionString": "0.3.1",
+        "CFBundleVersion": "0.3.1",
         "NSHighResolutionCapable": True,
         # No window of its own: the console opens in the technician's default
         # browser, so the app has no dock UI to speak of. LSUIElement would hide

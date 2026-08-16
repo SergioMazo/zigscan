@@ -30,6 +30,14 @@ class SyntheticDemoTests(unittest.TestCase):
         self.assertEqual(networks[0]["channel"], 15)
         self.assertTrue(networks[0]["zigbee"])
         self.assertTrue(networks[0]["permit_join"])
+        self.assertIn("Control4", networks[0]["vendors"])
+        self.assertTrue(networks[0]["vendors"]["Control4"])
+
+    def test_vendor_identity_uses_only_the_public_oui(self) -> None:
+        _beacons, sightings, _traffic = census.scan_file(SAMPLE)
+        control4 = [item for item in sightings if item["vendor"] == "Control4"]
+        self.assertTrue(control4)
+        self.assertTrue(all(item["mac"].startswith("00:0f:ff:") for item in control4))
 
     def test_cli_decoders_locate_long_address_mac_commands(self) -> None:
         frames = [item[0] for item in pcap_summary.records(SAMPLE.read_bytes())]

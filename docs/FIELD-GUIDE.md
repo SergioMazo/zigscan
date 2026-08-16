@@ -1,54 +1,55 @@
-# Guía de campo
+# Field Guide
 
-Para el técnico que llega a un sitio. Cinco minutos, no cinco páginas.
+For the technician arriving on site. Five minutes, not five pages.
 
-## Antes de salir de la oficina
+## Before leaving the office
 
-- Corré `./zigscan identify`. Si no ve la antena en la oficina, tampoco la va
-  a ver en la casa del cliente.
-- Verificá que la antena de 2.4 GHz esté enroscada en el SMA. Sin antena, todos
-  los canales se ven limpios y el reporte sale mal.
-- `setup.sh` ya corrió alguna vez. En sitio no hay internet confiable.
+- Run `./zigscan identify`. If it cannot see the radio in the office, it will
+  not see it at the customer's site either.
+- Confirm that the 2.4 GHz antenna is attached to the SMA connector. Without
+  the antenna, every channel looks clean and the report is misleading.
+- Run `setup.sh` at least once before the visit. Reliable internet access cannot
+  be assumed on site.
 
-## En el sitio
+## On site
 
-**1. Abrí la consola.**
+**1. Open the console.**
 
 ```bash
 ./zigscan survey
 ```
 
-**2. Corré el barrido.** Seis segundos por canal, unos dos minutos en total.
-Dejá la laptop cerca de donde va a vivir el coordinador, no en la puerta de
-entrada: lo que te interesa es el aire del lugar donde van a estar los equipos.
+**2. Run the sweep.** Six seconds per channel takes about two minutes in total.
+Place the laptop near the future coordinator location, not by the front door.
+The relevant RF environment is where the devices will operate.
 
-**3. Leé el resultado.**
+**3. Read the result.**
 
-- **Canal recomendado** — el más limpio entre 15, 20, 25 y 26. Ese es el número
-  que buscabas.
-- **Canal más ocupado** — casi siempre es el sistema que ya está instalado. Si
-  el cliente tiene un hub que se queda, ese canal está tomado.
-- **Sin tráfico en ningún canal** — sospechá de la antena antes de creerlo.
+- **Recommended channel** — the cleanest option among 15, 20, 25 and 26. This
+  is the operational answer you came for.
+- **Busiest channel** — usually the system already installed at the site. If a
+  customer's existing hub will remain, that channel is occupied.
+- **No traffic on any channel** — suspect the antenna before trusting the result.
 
-**4. Si el sitio tiene un problema, no un plan.** Cuando te llamaron porque "las
-luces responden lento", el barrido te dice si el canal está saturado. Si está
-limpio y el problema persiste, no es RF: es la malla, el ruteo o la
-alimentación, y ahí el barrido ya hizo su trabajo — descartó la causa más cara
-de descartar.
+**4. If the visit is for a problem rather than a plan.** When the complaint is
+"the lights respond slowly," the sweep shows whether the channel is congested.
+If the channel is clean and the problem remains, the likely cause is the mesh,
+routing, or power—not RF interference. The sweep has still done its job by
+eliminating the most expensive cause to rule out manually.
 
-## Lo que el barrido no contesta
+## What the sweep does not answer
 
-Escucha Zigbee, no Wi-Fi. Un canal en cero significa *no hay Zigbee acá*, no *no
-hay interferencia acá*. Un microondas o un AP saturado destruyen un canal que
-sale vacío en el reporte. Si el sitio es denso en Wi-Fi, esto acompaña un survey
-de Wi-Fi, no lo reemplaza.
+The radio listens to Zigbee, not Wi-Fi. A zero channel means *there is no Zigbee
+traffic here*, not *there is no interference here*. A microwave or a saturated
+access point can destroy a channel that looks empty in an 802.15.4 report. At a
+Wi-Fi-dense site, ZigScan complements a spectrum survey; it does not replace it.
 
-Zigbee también es muy callado en reposo. Si sospechás que hay una red y el
-barrido no la ve, pedile a alguien que prenda y apague una luz mientras escaneás
-ese canal, o subí el tiempo por canal a 15 segundos.
+Zigbee can also be very quiet while idle. If you suspect a network is present
+but the sweep misses it, ask someone to switch a light on and off while you scan
+that channel, or increase the time per channel to 15 seconds.
 
-## Guardar el trabajo
+## Save the job record
 
-Las capturas quedan en `captures/`, con fecha. Guardalas junto al expediente del
-trabajo: cuando dentro de seis meses el cliente diga que "siempre anduvo mal",
-tenés la medición del día de la instalación.
+CLI captures are stored in `captures/` with timestamps. Keep them with the job
+record. If a customer says six months later that the installation has "always
+been slow," you will have the measurement from installation day.
