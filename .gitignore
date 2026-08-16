@@ -1,0 +1,27 @@
+# Build output. The .dmg is a release artefact, not a source file — attach it
+# to a GitHub release instead of committing 17 MB per version.
+dist/
+build/
+*.spec.bak
+
+# Runtime, not source.
+.venv/
+__pycache__/
+*.pyc
+
+# The vendored Electronic Cats toolchain is fetched by setup.sh, not committed —
+# it stays upstream's code, at a pinned commit, with its own history.
+tools/catsniffer-tools/
+
+# Field captures belong to the customer, not to the repo. samples/ is the only
+# exception, and only for generated fixtures or an explicitly reviewed capture
+# from a temporary disposable demo PAN.
+captures/
+*.pcap
+!samples/*.pcap
+
+# Firmware images ship from Electronic Cats releases, not from here.
+firmware/*.hex
+firmware/*.uf2
+
+.DS_Store

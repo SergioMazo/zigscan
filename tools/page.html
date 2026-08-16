@@ -1,0 +1,857 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>zigscan — estudio de canal Zigbee</title>
+<style>
+/* Aurora. Fondo casi negro, tipografía del sistema muy apretada en los títulos,
+   y el gradiente verde-cian-violeta reservado para una sola cosa por pantalla:
+   el dato que el técnico vino a buscar. Si el gradiente aparece dos veces,
+   ya no señala nada. */
+:root{
+  --bg:#08090B; --fg:#F2F3F5; --muted:#B7BCC5; --dim:#71767F;
+  --line:rgba(255,255,255,.07); --line2:rgba(255,255,255,.13);
+  --mint:#5FE6A6; --cyan:#54D2E6; --violet:#9C7CFF;
+  --grad:linear-gradient(100deg,#5FE6A6,#54D2E6 46%,#9C7CFF);
+  --panel:linear-gradient(#14161C,#0E0F13);
+  --warn:#FFB454; --bad:#FF6B6B;
+  --sans:-apple-system,system-ui,"Helvetica Neue","Segoe UI",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,"Cascadia Code",Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--sans);
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px 48px}
+
+/* ---- barra superior ---- */
+header{position:sticky;top:0;z-index:20;background:rgba(8,9,11,.86);
+  backdrop-filter:saturate(140%) blur(12px);border-bottom:1px solid var(--line)}
+.topbar{max-width:1180px;margin:0 auto;padding:14px 24px;display:flex;
+  align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:-.2px;
+  color:var(--fg);text-decoration:none}
+.brand:hover small{color:var(--mint)}
+.dot{width:11px;height:11px;border-radius:50%;background:var(--grad)}
+.brand small{color:var(--dim);font-weight:400;letter-spacing:.14em;
+  text-transform:uppercase;font-size:10.5px;margin-left:2px;transition:color .15s}
+.tabs{display:flex;gap:2px;background:rgba(255,255,255,.04);padding:3px;border-radius:9px}
+.tab{padding:6px 14px;border-radius:7px;font-size:13.5px;color:var(--muted);
+  cursor:pointer;border:0;background:none;font-family:inherit}
+.tab.on{background:rgba(255,255,255,.09);color:var(--fg)}
+.spacer{flex:1}
+.lang{display:flex;gap:1px;background:rgba(255,255,255,.04);padding:3px;border-radius:8px}
+.lang button{padding:5px 10px;border-radius:6px;font-size:11.5px;letter-spacing:.06em;
+  color:var(--dim);cursor:pointer;border:0;background:none;font-family:inherit}
+.lang button.on{background:rgba(255,255,255,.09);color:var(--fg)}
+.pill{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;
+  color:var(--muted);border:1px solid var(--line2);border-radius:99px;padding:5px 12px}
+.pill b{color:var(--fg);font-weight:500;font-family:var(--mono);font-size:11.5px}
+.led{width:7px;height:7px;border-radius:50%;background:var(--dim)}
+.led.ok{background:var(--mint);box-shadow:0 0 8px rgba(95,230,166,.7)}
+.led.no{background:var(--bad)}
+
+button.act{font:500 14px var(--sans);color:var(--fg);background:transparent;
+  border:1px solid var(--line2);border-radius:9px;padding:9px 16px;cursor:pointer}
+button.act:hover:not(:disabled){border-color:rgba(95,230,166,.4)}
+button.act:disabled{opacity:.38;cursor:default}
+button.primary{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+
+/* ---- progreso ---- */
+#progress{border-bottom:1px solid var(--line);background:rgba(95,230,166,.045)}
+#progress .inner{max-width:1180px;margin:0 auto;padding:13px 24px;display:flex;
+  align-items:center;gap:14px;flex-wrap:wrap}
+.spin{width:13px;height:13px;border-radius:50%;border:2px solid rgba(255,255,255,.16);
+  border-top-color:var(--mint);animation:sp .8s linear infinite;flex:none}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.spin{animation:none}}
+#progress b{font-weight:600;letter-spacing:-.2px}
+#progress .sub{color:var(--dim);font-size:12.5px;font-family:var(--mono)}
+.track{flex:1;min-width:150px;height:4px;border-radius:3px;background:rgba(255,255,255,.09);
+  overflow:hidden}
+.track i{display:block;height:100%;background:var(--grad);width:0;transition:width .4s ease}
+
+/* ---- resultado ---- */
+.hero{padding:44px 0 30px;border-bottom:1px solid var(--line)}
+.eyebrow{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--dim);margin-bottom:20px}
+.answer{display:flex;align-items:baseline;gap:22px;flex-wrap:wrap}
+.bigch{font-size:92px;font-weight:700;letter-spacing:-3.2px;line-height:.9;
+  background:var(--grad);-webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent}
+.answer h1{font-size:31px;font-weight:700;letter-spacing:-1px;margin:0;max-width:640px}
+.answer p{color:var(--muted);margin:9px 0 0;max-width:640px;font-size:14.5px}
+.pending{color:var(--dim);font-size:15px}
+
+/* ---- paneles ---- */
+.grid{display:grid;gap:18px;margin-top:26px}
+@media(min-width:900px){.grid.two{grid-template-columns:1fr 1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px}
+.phead{display:flex;align-items:center;gap:9px;margin-bottom:16px}
+.panel h2{font-size:12px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--dim);margin:0;font-weight:500}
+.qmark{width:17px;height:17px;border-radius:50%;border:1px solid var(--line2);
+  color:var(--dim);background:none;font:600 10.5px var(--sans);cursor:pointer;
+  line-height:1;flex:none;padding:0}
+.qmark:hover,.qmark.on{border-color:rgba(95,230,166,.5);color:var(--mint)}
+.help{display:none;border-left:2px solid rgba(95,230,166,.35);padding:2px 0 2px 13px;
+  margin:0 0 16px;color:var(--muted);font-size:13px;line-height:1.6}
+.help.on{display:block}
+.hint{color:var(--dim);font-size:12.5px;margin:14px 0 0;line-height:1.5}
+
+/* ---- espectro ---- */
+.chart{position:relative;height:150px;margin:6px 0 4px}
+.wifiband{position:absolute;top:0;bottom:26px;border-radius:5px;
+  background:rgba(156,124,255,.11);border:1px dashed rgba(156,124,255,.34)}
+.wifiband span{position:absolute;top:5px;left:7px;font-size:9.5px;
+  color:var(--violet);letter-spacing:.09em;text-transform:uppercase;white-space:nowrap}
+.bars{position:absolute;inset:0 0 26px 0;display:flex;align-items:flex-end}
+.slot{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+  height:100%;position:relative}
+.bar{width:62%;min-height:3px;border-radius:3px 3px 0 0;background:rgba(255,255,255,.19)}
+.slot.busy .bar{background:var(--warn)}
+.slot.pick .bar{background:var(--grad)}
+.slot.unmeasured .bar{background:none;border:1px dashed rgba(255,255,255,.14);min-height:9px}
+.axis{position:absolute;left:0;right:0;bottom:0;display:flex;height:26px}
+.axis div{flex:1;text-align:center;font:11px var(--mono);color:var(--dim);padding-top:7px}
+.axis div.pick{color:var(--mint)}
+.axis div.busy{color:var(--warn)}
+.axis div.unmeasured{color:rgba(255,255,255,.22)}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:11.5px;color:var(--dim);
+  margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.legend i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:6px}
+
+/* ---- señal ---- */
+.sig{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.sigbar{width:38px;height:5px;border-radius:3px;background:rgba(255,255,255,.09);
+  overflow:hidden;flex:none}
+.sigbar i{display:block;height:100%}
+.sigtxt{font-family:var(--mono);font-size:12px}
+.siglabel{font-size:11.5px;color:var(--dim)}
+
+/* ---- tablas ---- */
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--dim);font-weight:500;padding:0 10px 9px 0;border-bottom:1px solid var(--line)}
+td{padding:11px 10px 11px 0;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.mono{font-family:var(--mono);font-size:12.5px}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:5px;
+  border:1px solid var(--line2);color:var(--muted);margin:0 5px 4px 0;white-space:nowrap}
+.tag.brand{border-color:rgba(95,230,166,.4);color:var(--mint)}
+.tag.risk{border-color:rgba(255,107,107,.45);color:var(--bad)}
+.tag.q{border-color:rgba(255,255,255,.13);color:var(--dim)}
+.empty{color:var(--dim);font-size:13.5px;padding:6px 0}
+
+pre.log{margin:0;background:#0B0C0F;border:1px solid var(--line);border-radius:11px;
+  padding:15px;max-height:330px;overflow:auto;font:12px/1.65 var(--mono);color:#C9CDD4;
+  white-space:pre-wrap}
+.rowsplit{display:flex;justify-content:space-between;align-items:center;gap:14px;
+  margin-bottom:14px;flex-wrap:wrap}
+.caps{max-height:210px;overflow:auto}
+.cap{display:flex;justify-content:space-between;gap:10px;padding:9px 11px;
+  border:1px solid var(--line);border-radius:9px;margin-bottom:7px;cursor:pointer;font-size:13px}
+.cap:hover{border-color:var(--line2)}
+.cap.on{border-color:rgba(95,230,166,.45);background:rgba(95,230,166,.05)}
+.cap small{color:var(--dim);font-family:var(--mono);font-size:11.5px}
+input[type=number]{background:#0B0C0F;color:var(--fg);border:1px solid var(--line2);
+  border-radius:7px;padding:7px 9px;font-family:var(--mono)}
+label{font-size:13.5px;color:var(--muted)}
+
+/* ---- firma ---- */
+footer{border-top:1px solid var(--line);margin-top:8px}
+.foot{max-width:1180px;margin:0 auto;padding:26px 24px 40px;display:flex;
+  justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
+.foot .who{font-size:13.5px;color:var(--muted)}
+.foot .who b{color:var(--fg);font-weight:600;letter-spacing:-.2px}
+.foot a{color:var(--mint);text-decoration:none;font-size:13.5px}
+.foot a:hover{text-decoration:underline}
+.foot .lic{color:var(--dim);font-size:11.5px}
+[hidden]{display:none!important}
+</style></head><body>
+
+<header><div class="topbar">
+  <a class="brand" href="https://www.auroraproject.ai" target="_blank" rel="noopener">
+    <span class="dot"></span>zigscan <small>Aurora</small></a>
+  <div class="tabs">
+    <button class="tab on" id="tabCampo" data-t="tabField"></button>
+    <button class="tab" id="tabAnalisis" data-t="tabAnalysis"></button>
+  </div>
+  <div class="spacer"></div>
+  <div class="lang">
+    <button id="langEs" class="on">ES</button><button id="langEn">EN</button>
+  </div>
+  <span class="pill"><span class="led" id="led"></span><span id="portTxt"></span></span>
+  <button class="act primary" id="btnScan" disabled data-t="scan"></button>
+</div></header>
+
+<div id="progress" hidden><div class="inner">
+  <span class="spin"></span>
+  <b id="progTitle"></b>
+  <div class="track"><i id="progFill"></i></div>
+  <span class="sub" id="progSub"></span>
+</div></div>
+
+<div class="wrap">
+
+<section id="campo">
+  <div class="hero">
+    <div class="eyebrow" data-t="eyebrowField"></div>
+    <div class="answer" id="answer"></div>
+  </div>
+
+  <div class="panel" style="margin-top:26px">
+    <div class="phead"><h2 data-t="occupancy"></h2><button class="qmark" data-help="helpOccupancy">?</button></div>
+    <p class="help" id="help-helpOccupancy" data-t="helpOccupancy"></p>
+    <div class="chart" id="chart"></div>
+    <div class="legend">
+      <span><i style="background:rgba(255,255,255,.19)"></i><span data-t="legFrames"></span></span>
+      <span><i style="background:var(--warn)"></i><span data-t="legWifiOver"></span></span>
+      <span><i style="background:var(--mint)"></i><span data-t="legPick"></span></span>
+      <span><i style="border:1px dashed rgba(255,255,255,.3)"></i><span data-t="legUnmeasured"></span></span>
+      <span><i style="background:rgba(156,124,255,.3);border:1px dashed rgba(156,124,255,.6)"></i><span data-t="legWifi"></span></span>
+    </div>
+    <p class="hint" id="chartHint"></p>
+  </div>
+
+  <div class="grid two">
+    <div class="panel">
+      <div class="phead"><h2 data-t="census"></h2><button class="qmark" data-help="helpCensus">?</button></div>
+      <p class="help" id="help-helpCensus" data-t="helpCensus"></p>
+      <div id="census"></div>
+      <p class="hint" data-t="censusHint"></p>
+    </div>
+
+    <div class="panel">
+      <div class="phead"><h2 data-t="wifi"></h2><button class="qmark" data-help="helpWifi">?</button></div>
+      <p class="help" id="help-helpWifi" data-t="helpWifi"></p>
+      <div id="wifi"></div>
+      <p class="hint" data-t="wifiHint"></p>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:18px">
+    <div class="phead"><h2 data-t="diagnosis"></h2><button class="qmark" data-help="helpVerdict">?</button></div>
+    <p class="help" id="help-helpVerdict" data-t="helpVerdict"></p>
+    <div id="verdict"></div>
+  </div>
+
+  <div class="panel" style="margin-top:18px">
+    <div class="phead"><h2 data-t="signalGuide"></h2><button class="qmark" data-help="helpSignal">?</button></div>
+    <p class="help" id="help-helpSignal" data-t="helpSignal"></p>
+    <div id="sigLegend"></div>
+  </div>
+</section>
+
+<section id="analisis" hidden>
+  <div class="hero">
+    <div class="eyebrow" data-t="eyebrowAnalysis"></div>
+    <div class="answer"><h1 data-t="analysisTitle"></h1></div>
+    <p style="color:var(--muted);margin:10px 0 0;max-width:640px;font-size:14.5px"
+       data-t="analysisLead"></p>
+  </div>
+
+  <div class="grid two" style="margin-top:26px">
+    <div class="panel">
+      <div class="phead"><h2 data-t="captureOne"></h2><button class="qmark" data-help="helpCapture">?</button></div>
+      <p class="help" id="help-helpCapture" data-t="helpCapture"></p>
+      <div class="rowsplit">
+        <label><span data-t="channel"></span>
+          <input id="snCh" type="number" min="11" max="26" value="15" style="width:64px;margin-left:8px"></label>
+        <label><span data-t="seconds"></span>
+          <input id="snSec" type="number" min="5" max="900" value="60" style="width:74px;margin-left:8px"></label>
+        <button class="act" id="btnSniff" disabled data-t="capture"></button>
+      </div>
+      <div class="phead" style="margin-top:22px"><h2 data-t="captures"></h2></div>
+      <div class="caps" id="caps"></div>
+    </div>
+
+    <div class="panel">
+      <div class="phead"><h2 data-t="console"></h2></div>
+      <pre class="log" id="log"></pre>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:18px">
+    <div class="phead"><h2 data-t="framesTitle"></h2>
+      <span id="frameOf" style="color:var(--dim);font-size:12px;font-family:var(--mono)"></span></div>
+    <div id="frames"></div>
+  </div>
+</section>
+
+</div>
+
+<footer><div class="foot">
+  <div class="who"><b>Sergio Mazo</b> · <span data-t="footRole"></span></div>
+  <a href="https://www.auroraproject.ai" target="_blank" rel="noopener">www.auroraproject.ai</a>
+  <div class="lic">zigscan · GPL-3.0 · <span data-t="footHw"></span></div>
+</div></footer>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* =======================================================================
+   Idioma. Todo el texto visible vive acá y no en el backend: el servidor
+   devuelve datos y un código de nivel, la página decide cómo se dice. Así
+   agregar un idioma no toca Python.
+   ======================================================================= */
+const T = {
+es:{
+  tabField:"Campo", tabAnalysis:"Análisis", scan:"Barrer canales", scanning:"Barriendo…",
+  eyebrowField:"Estudio de canal · 2.4 GHz",
+  noScan:'Todavía no hay barrido. Dale a <b style="color:var(--fg)">Barrer canales</b> — son unos dos minutos.',
+  noPreferred:"El barrido no cubrió los canales 15, 20, 25 ni 26, que son los que esquivan el Wi-Fi. Barré completo para tener una recomendación.",
+  useChannel:"Usá el canal",
+  clean:"Sin tráfico Zigbee y sin Wi-Fi encima. Es el canal limpio de esta casa.",
+  cleanWifi:"Libre de Wi-Fi. Tiene {n} trama(s) de otro sistema Zigbee, que es lo mejor disponible.",
+  knownNet:"Ojo: el censo ya vio {n} red(es) en este canal aunque el barrido no las oyera — Zigbee en reposo es mudo.",
+  noneFree:"Ningún canal quedó libre: este es el menos malo, con {n} AP de Wi-Fi encima. Considerá mover el Wi-Fi antes que el Zigbee.",
+  occupancy:"Ocupación de 2.4 GHz", census:"Quién ya está en el aire", wifi:"Wi-Fi en sitio",
+  diagnosis:"Diagnóstico", signalGuide:"Cómo leer la señal",
+  legFrames:"tramas Zigbee halladas", legWifiOver:"tapado por Wi-Fi", legPick:"recomendado",
+  legUnmeasured:"sin medir", legWifi:"Wi-Fi medido en sitio",
+  chartMeasured:"{m} de 16 canales medidos · {b} con tráfico · {f} tramas · 2400-2485 MHz",
+  chartNone:"Sin barrido todavía — los canales punteados no se han medido. Las bandas moradas son el Wi-Fi que la laptop ya está midiendo.",
+  censusHint:"Marcas leídas del OUI de cada equipo. El extended PAN ID no sirve para identificar fabricante — muchos coordinadores lo generan al azar.",
+  wifiHint:"Medido con la tarjeta de esta laptop. Solo 2.4 GHz le compite a Zigbee; 5 y 6 GHz van como contexto para cuando el trabajo es la red Wi-Fi.",
+  censusEmpty:"Ninguna red identificada todavía. Ojo: una red Zigbee en reposo es muda — que no aparezca no prueba que no exista.",
+  verdictEmpty:"Capturá un canal con tráfico para saber si un problema es de interferencia o de la malla.",
+  wifiScanning:"Escaneando Wi-Fi…", wifiNone:"Sin datos de Wi-Fi.",
+  band:"banda", aps:"AP", channels:"canales", ch:"ch", pan:"PAN", signal:"señal", network:"red",
+  wifiRec:"Para el Wi-Fi de 2.4 GHz de esta casa: <b style='color:var(--mint)'>canal {c}</b> ({n} AP encima). 1, 6 y 11 son los únicos que no se pisan entre sí.",
+  devices:"equipo(s)", noBeacon:"sin beacon", permitOpen:"permit-join abierto",
+  notZigbee:"no es Zigbee", unidentified:"sin identificar", noBrand:"marca no visible",
+  frames:"trama(s)",
+  eyebrowAnalysis:"Modo análisis · tramas y capturas",
+  analysisTitle:"Lo que hay debajo del resultado",
+  analysisLead:"Captura dirigida, tramas decodificadas y los pcap crudos para llevar a Wireshark. La radio nunca transmite.",
+  captureOne:"Capturar un canal", channel:"canal", seconds:"segundos", capture:"Capturar",
+  captures:"Capturas", console:"Consola", framesTitle:"Tramas",
+  noJobs:"Sin trabajos todavía.", noCaptures:"Sin capturas todavía.",
+  pickCapture:"Elegí una captura para ver sus tramas.", decoding:"Decodificando…",
+  starting:"Arrancando…", cantStart:"No se pudo iniciar el trabajo.",
+  readFail:"No se pudo leer", noFrames:"Sin tramas legibles.",
+  fileTooShort:"El archivo es demasiado corto para ser un PCAP.",
+  notPcap:"El archivo no es un PCAP.",
+  errCaptureNotFound:"No se encontró la captura.", errJobNotFound:"No se encontró el trabajo.",
+  errNotFound:"No se encontró el recurso.", errDwellRange:"El tiempo por canal debe ser de 2 a 60 s.",
+  errChannelRange:"El canal debe estar entre 11 y 26.", errSecondsRange:"La captura debe durar de 5 a 900 s.",
+  errRoleSwitch:"El cambio de rol no está disponible: el CatSniffer permanece como sniffer.",
+  errJobBusy:"Ya hay un trabajo usando la radio.", errBadRequest:"La solicitud no es válida.",
+  wifiScanFailed:"Falló el escaneo de Wi-Fi.", wifiProfilerError:"macOS devolvió un error al consultar Wi-Fi.",
+  wifiParseFailed:"No se pudo interpretar el informe de Wi-Fi.",
+  wifiNoNetworks:"macOS no reportó redes Wi-Fi. Comprobá que Wi-Fi esté encendido.",
+  boardParallels:"Parallels tiene la antena; macOS no dispone del puerto serie.",
+  boardNoSerial:"Sin puerto serie; la radio no está disponible.",
+  boardRadioBusy:"Un trabajo está usando la radio.",
+  type:"tipo", source:"origen", dest:"destino", detail:"detalle", encrypted:"cifrada",
+  scanningCh:"Barriendo canales", channelOf:"canal {c} · {i} de {n}", elapsed:"{s}s",
+  capturingCh:"Capturando canal {c}",
+  noAntenna:"sin antena", antenna:"antena",
+  rssiVeryStrong:"muy cerca", rssiStrong:"buena", rssiWeak:"lejos / débil",
+  rssiVeryWeak:"al límite", rssiUnknown:"sin dato",
+  vUnknown:"No hay tráfico suficiente para juzgar",
+  vUnknownD:"Se capturaron menos de 20 tramas de datos, muy pocas para medir una tasa de reintentos. Capturá más tiempo, o en el horario del que se queja el cliente.",
+  vInterference:"Interferencia — mové la red a un canal limpio",
+  vInterferenceD:"El {rate}% de las tramas de datos son retransmisiones y el canal está cargado ({fps} tramas/s{aps}). Las radios están peleando por el aire.",
+  vMesh:"No es RF — es la malla, no el canal",
+  vMeshD:"El {rate}% de las tramas de datos son retransmisiones, pero el canal está tranquilo ({fps} tramas/s). Cambiar de canal no lo va a arreglar. Mirá distancia, ubicación de repetidores, ruteo y cobertura de equipos con corriente.",
+  vWatch:"Al límite — funciona, pero forzado",
+  vWatchD:"El {rate}% de las tramas de datos son retransmisiones. No está roto, pero no tiene margen. Conviene arreglarlo antes de que el cliente agregue más equipos.",
+  vOk:"El RF está sano — buscá en otro lado",
+  vOkD:"Solo el {rate}% de las tramas de datos son retransmisiones. Sea cual sea la queja, el aire no la está causando. Revisá el hub, la integración, las automatizaciones o los equipos.",
+  vApsOver:", {n} AP de Wi-Fi encima",
+  vData:"datos", vRetries:"reintentos",
+  footRole:"Reversing, seguridad y automatización",
+  footHw:"sobre hardware real",
+  helpOccupancy:"Cada barra es un canal Zigbee y su altura son las tramas que la antena escuchó ahí. Las bandas moradas son el Wi-Fi real de esta casa, medido con la laptop: un AP de 40 MHz tapa hasta ocho canales Zigbee. Los canales punteados no se midieron — no son canales limpios, son canales desconocidos.",
+  helpCensus:"Las redes que ya funcionan en este lugar. El PAN ID identifica cada red; la marca se lee del OUI de los equipos y solo aparece cuando alguien se une a la red — en una red ya formada todo va con direcciones cortas, que no llevan fabricante. Si una red aparece con permit-join abierto, cualquiera en rango puede meterle un equipo.",
+  helpWifi:"Medido con la tarjeta de esta laptop, sin contraseñas. Solo la banda de 2.4 GHz compite con Zigbee — 5 y 6 GHz no le hacen nada. Se muestran igual porque el mismo técnico que elige canal Zigbee suele estar instalando el Wi-Fi.",
+  helpVerdict:"Responde la pregunta cara: ¿las luces van lentas por interferencia o por la malla? Se mide contando retransmisiones. Muchos reintentos con el canal saturado es interferencia, y se arregla moviendo de canal. Muchos reintentos con el canal tranquilo NO es RF: es ruteo, distancia o falta de repetidores, y cambiar de canal no lo arregla.",
+  helpSignal:"El dBm es negativo y más cerca de cero es mejor. Sirve para saber si lo que escuchás está en esta casa o es del vecino.",
+  helpCapture:"Graba un canal durante los segundos que le digas. Útil cuando ya sabés qué canal te interesa y querés ver las tramas, o cuando necesitás tráfico para el diagnóstico. Pedí que muevan una luz mientras grabás: Zigbee en reposo casi no habla.",
+  sigNear:"Está en esta casa, cerca del punto de medición.",
+  sigOk:"Dentro de la casa, a distancia normal de trabajo.",
+  sigFar:"Lejos, otra planta, o del vecino. Poco confiable.",
+  sigEdge:"Al límite de lo audible. Casi seguro no es de esta instalación."
+},
+en:{
+  tabField:"Field", tabAnalysis:"Analysis", scan:"Sweep channels", scanning:"Sweeping…",
+  eyebrowField:"Channel survey · 2.4 GHz",
+  noScan:'No sweep yet. Hit <b style="color:var(--fg)">Sweep channels</b> — it takes about two minutes.',
+  noPreferred:"The sweep did not cover channels 15, 20, 25 or 26, the ones that dodge Wi-Fi. Run a full sweep for a recommendation.",
+  useChannel:"Use channel",
+  clean:"No Zigbee traffic and no Wi-Fi on top. This is the clear channel in this building.",
+  cleanWifi:"Clear of Wi-Fi. It carries {n} frame(s) from another Zigbee system, which is the best available.",
+  knownNet:"Note: the census already saw {n} network(s) on this channel even though the sweep did not hear them — idle Zigbee is silent.",
+  noneFree:"No channel came back clear: this is the least bad, with {n} Wi-Fi AP on top. Consider moving the Wi-Fi before the Zigbee.",
+  occupancy:"2.4 GHz occupancy", census:"Who is already on the air", wifi:"Wi-Fi on site",
+  diagnosis:"Diagnosis", signalGuide:"How to read signal",
+  legFrames:"Zigbee frames found", legWifiOver:"covered by Wi-Fi", legPick:"recommended",
+  legUnmeasured:"not measured", legWifi:"Wi-Fi measured on site",
+  chartMeasured:"{m} of 16 channels measured · {b} with traffic · {f} frames · 2400-2485 MHz",
+  chartNone:"No sweep yet — the dashed channels have not been measured. The purple bands are the Wi-Fi the laptop is already measuring.",
+  censusHint:"Brands read from each device's OUI. The extended PAN ID is no use for identifying a vendor — many coordinators generate it at random.",
+  wifiHint:"Measured with this laptop's own card. Only 2.4 GHz competes with Zigbee; 5 and 6 GHz are context for when the job is the Wi-Fi network.",
+  censusEmpty:"No network identified yet. Careful: an idle Zigbee network is silent — absence here does not prove absence on the air.",
+  verdictEmpty:"Capture a channel with traffic to tell interference from a mesh problem.",
+  wifiScanning:"Scanning Wi-Fi…", wifiNone:"No Wi-Fi data.",
+  band:"band", aps:"AP", channels:"channels", ch:"ch", pan:"PAN", signal:"signal", network:"network",
+  wifiRec:"For this building's 2.4 GHz Wi-Fi: <b style='color:var(--mint)'>channel {c}</b> ({n} AP on top). 1, 6 and 11 are the only ones that do not overlap each other.",
+  devices:"device(s)", noBeacon:"no beacon", permitOpen:"permit-join open",
+  notZigbee:"not Zigbee", unidentified:"unidentified", noBrand:"brand not visible",
+  frames:"frame(s)",
+  eyebrowAnalysis:"Analysis mode · frames and captures",
+  analysisTitle:"What sits under the answer",
+  analysisLead:"Targeted capture, decoded frames and the raw pcaps to take into Wireshark. The radio never transmits.",
+  captureOne:"Capture a channel", channel:"channel", seconds:"seconds", capture:"Capture",
+  captures:"Captures", console:"Console", framesTitle:"Frames",
+  noJobs:"No jobs yet.", noCaptures:"No captures yet.",
+  pickCapture:"Pick a capture to see its frames.", decoding:"Decoding…",
+  starting:"Starting…", cantStart:"Could not start the job.",
+  readFail:"Could not read", noFrames:"No readable frames.",
+  fileTooShort:"The file is too short to be a PCAP.", notPcap:"The file is not a PCAP.",
+  errCaptureNotFound:"Capture not found.", errJobNotFound:"Job not found.",
+  errNotFound:"Resource not found.", errDwellRange:"Channel dwell must be between 2 and 60 s.",
+  errChannelRange:"Channel must be between 11 and 26.", errSecondsRange:"Capture duration must be between 5 and 900 s.",
+  errRoleSwitch:"Role switching is unavailable: the CatSniffer remains a sniffer.",
+  errJobBusy:"Another job is already using the radio.", errBadRequest:"The request is not valid.",
+  wifiScanFailed:"The Wi-Fi scan failed.", wifiProfilerError:"macOS returned an error while reading Wi-Fi.",
+  wifiParseFailed:"Could not parse the Wi-Fi report.",
+  wifiNoNetworks:"macOS reported no Wi-Fi networks. Check that Wi-Fi is switched on.",
+  boardParallels:"Parallels holds the antenna; macOS has no serial port.",
+  boardNoSerial:"No serial port; the radio is unavailable.",
+  boardRadioBusy:"A job is using the radio.",
+  type:"type", source:"source", dest:"dest", detail:"detail", encrypted:"encrypted",
+  scanningCh:"Sweeping channels", channelOf:"channel {c} · {i} of {n}", elapsed:"{s}s",
+  capturingCh:"Capturing channel {c}",
+  noAntenna:"no antenna", antenna:"antenna",
+  rssiVeryStrong:"very close", rssiStrong:"good", rssiWeak:"far / weak",
+  rssiVeryWeak:"at the edge", rssiUnknown:"no data",
+  vUnknown:"Not enough traffic to judge",
+  vUnknownD:"Fewer than 20 data frames were captured, too few to measure a retry rate. Capture for longer, or during the hours the customer complains about.",
+  vInterference:"Interference — move the network to a clear channel",
+  vInterferenceD:"{rate}% of data frames are retransmissions and the channel is busy ({fps} frames/s{aps}). The radios are fighting for air.",
+  vMesh:"Not RF — this is the mesh, not the channel",
+  vMeshD:"{rate}% of data frames are retransmissions, but the channel is quiet ({fps} frames/s). Changing channel will not fix this. Look at distance, repeater placement, routing and mains-powered device coverage.",
+  vWatch:"Marginal — working, but working hard",
+  vWatchD:"{rate}% of data frames are retransmissions. Not broken, but there is no headroom. Worth fixing before the customer adds more devices.",
+  vOk:"RF is healthy — look elsewhere",
+  vOkD:"Only {rate}% of data frames are retransmissions. Whatever the complaint is, the air is not causing it. Check the hub, the integration, the automations or the devices themselves.",
+  vApsOver:", {n} Wi-Fi AP overlapping",
+  vData:"data", vRetries:"retries",
+  footRole:"Reversing, security and automation",
+  footHw:"on real hardware",
+  helpOccupancy:"Each bar is a Zigbee channel and its height is the frames the antenna heard there. The purple bands are this building's real Wi-Fi, measured with the laptop: one 40 MHz AP covers up to eight Zigbee channels. Dashed channels were not measured — they are unknown, not clear.",
+  helpCensus:"The networks already running here. The PAN ID identifies each one; the brand is read from device OUIs and only shows up when a device joins — a settled network uses short addresses, which carry no vendor. A network beaconing with permit-join open will accept a device from anyone in range.",
+  helpWifi:"Measured with this laptop's card, no passwords needed. Only the 2.4 GHz band competes with Zigbee — 5 and 6 GHz cannot touch it. They are shown anyway because the technician choosing a Zigbee channel is usually installing the Wi-Fi too.",
+  helpVerdict:"Answers the expensive question: are the lights slow because of interference, or because of the mesh? Measured by counting retransmissions. Many retries on a busy channel is interference, and moving channel fixes it. Many retries on a quiet channel is NOT RF: it is routing, distance or missing repeaters, and changing channel will not help.",
+  helpSignal:"dBm is negative and closer to zero is better. It tells you whether what you are hearing is in this building or the neighbour's.",
+  helpCapture:"Records one channel for as long as you say. Useful when you already know the channel and want to see frames, or when you need traffic for the diagnosis. Ask someone to toggle a light while it runs: idle Zigbee barely speaks.",
+  sigNear:"Inside this building, close to where you are measuring.",
+  sigOk:"Inside the building, at normal working distance.",
+  sigFar:"Far away, another floor, or the neighbour's. Not reliable.",
+  sigEdge:"At the edge of audibility. Almost certainly not this installation."
+}};
+
+let LANG = localStorage.getItem("zigscan-lang") || "es";
+const t = (k, vars) => {
+  let s = (T[LANG] && T[LANG][k]) || T.es[k] || k;
+  if(vars) for(const n in vars) s = s.split("{" + n + "}").join(vars[n]);
+  return s;
+};
+
+const ERROR_KEYS = {
+  capture_not_found:"errCaptureNotFound", job_not_found:"errJobNotFound",
+  not_found:"errNotFound", dwell_range:"errDwellRange", channel_range:"errChannelRange",
+  seconds_range:"errSecondsRange", role_switch_removed:"errRoleSwitch",
+  job_busy:"errJobBusy", bad_request:"errBadRequest"
+};
+const NOTE_KEYS = {file_too_short:"fileTooShort", not_pcap:"notPcap"};
+const WIFI_NOTE_KEYS = {
+  scan_failed:"wifiScanFailed", profiler_error:"wifiProfilerError",
+  parse_failed:"wifiParseFailed", no_networks:"wifiNoNetworks"
+};
+const BOARD_KEYS = {
+  parallels:"boardParallels", no_serial:"boardNoSerial", radio_busy:"boardRadioBusy"
+};
+let LOG_MESSAGE = {key:"noJobs"};
+let FRAMES_MESSAGE = {key:"pickCapture"};
+
+function paintMessage(el, message){
+  if(!message) return;
+  el.textContent = message.key ? t(message.key, message.vars) : (message.text || "");
+}
+function showLogKey(key, vars){ LOG_MESSAGE = {key:key, vars:vars}; paintMessage($("log"), LOG_MESSAGE); }
+function showLogRaw(value){ LOG_MESSAGE = {text:value}; paintMessage($("log"), LOG_MESSAGE); }
+function showFramesKey(key, vars){
+  FRAMES_MESSAGE = {key:key, vars:vars};
+  $("frames").innerHTML = '<div class="empty">' + esc(t(key, vars)) + '</div>';
+}
+function backendText(code, fallback){
+  const key = ERROR_KEYS[code];
+  return key ? t(key) : (fallback || t("cantStart"));
+}
+
+function applyLang(){
+  document.documentElement.lang = LANG;
+  document.querySelectorAll("[data-t]").forEach(el => {
+    const s = t(el.dataset.t);
+    if(/<[a-z]/i.test(s)) el.innerHTML = s; else el.textContent = s;
+  });
+  $("langEs").classList.toggle("on", LANG === "es");
+  $("langEn").classList.toggle("on", LANG === "en");
+  paintMessage($("log"), LOG_MESSAGE);
+  renderSigLegend();
+  if(STATE) renderAll();
+  if(PICKED) loadFrames(PICKED); else if(FRAMES_MESSAGE) showFramesKey(FRAMES_MESSAGE.key, FRAMES_MESSAGE.vars);
+}
+$("langEs").onclick = () => { LANG = "es"; localStorage.setItem("zigscan-lang", LANG); applyLang(); };
+$("langEn").onclick = () => { LANG = "en"; localStorage.setItem("zigscan-lang", LANG); applyLang(); };
+
+/* ---------- ayuda de campo ---------- */
+document.querySelectorAll(".qmark").forEach(b => {
+  b.onclick = () => b.classList.toggle("on", $("help-" + b.dataset.help).classList.toggle("on"));
+});
+
+/* ---------- señal ---------- */
+// La sensibilidad del CC1352P7 ronda -100 dBm; por encima de -55 la fuente está
+// prácticamente al lado. Lo que el técnico necesita no es el número: es saber
+// si eso que escucha está adentro de la casa o es del vecino.
+function sig(dbm){
+  if(dbm == null || dbm <= -128) return {label:t("rssiUnknown"), color:"var(--dim)", pct:0};
+  const pct = Math.max(4, Math.min(100, Math.round((dbm + 100) * 100 / 55)));
+  if(dbm >= -55) return {label:t("rssiVeryStrong"), color:"var(--mint)", pct};
+  if(dbm >= -70) return {label:t("rssiStrong"), color:"var(--cyan)", pct};
+  if(dbm >= -85) return {label:t("rssiWeak"), color:"var(--warn)", pct};
+  return {label:t("rssiVeryWeak"), color:"var(--bad)", pct};
+}
+function sigHTML(dbm){
+  const s = sig(dbm);
+  return '<div class="sig"><span class="sigbar"><i style="width:' + s.pct + '%;background:'
+    + s.color + '"></i></span><span class="sigtxt" style="color:' + s.color + '">'
+    + (dbm == null || dbm <= -128 ? "—" : dbm + " dBm") + '</span>'
+    + '<span class="siglabel">' + esc(s.label) + '</span></div>';
+}
+function renderSigLegend(){
+  const rows = [[-45, "sigNear"], [-62, "sigOk"], [-78, "sigFar"], [-92, "sigEdge"]];
+  $("sigLegend").innerHTML = '<table>' + rows.map(r =>
+    '<tr><td style="width:230px">' + sigHTML(r[0]) + '</td><td style="color:var(--muted)">'
+    + esc(t(r[1])) + '</td></tr>').join("") + '</table>';
+}
+
+/* ---------- pestañas ---------- */
+function mode(which){
+  const campo = which === "campo";
+  $("campo").hidden = !campo; $("analisis").hidden = campo;
+  $("tabCampo").classList.toggle("on", campo);
+  $("tabAnalisis").classList.toggle("on", !campo);
+}
+$("tabCampo").onclick = () => mode("campo");
+$("tabAnalisis").onclick = () => mode("analisis");
+
+/* ---------- estado ---------- */
+const PREFERRED = [15, 20, 25, 26];
+const CH = Array.from({length:16}, (_, i) => 11 + i);
+const mhz = ch => 2405 + 5 * (ch - 11);
+let STATE = null, JOB = null, PICKED = null;
+
+// Canales donde el censo ya vio una red, aunque el barrido no haya oído nada.
+// Una red Zigbee en reposo es muda: seis segundos de escucha pueden devolver
+// cero sobre un canal que tiene un coordinador vivo. Ignorar eso lleva a
+// recomendar el canal del sistema que ya está instalado.
+function knownNetworks(census){
+  const m = {};
+  (census || []).forEach(r => { if(r.channel != null) m[r.channel] = (m[r.channel] || 0) + 1; });
+  return m;
+}
+
+function recommend(spec, wifi, scanned, census){
+  const overlap = (wifi && wifi.zigbee_overlap) || {};
+  const known = knownNetworks(census);
+  // Solo se recomienda un canal que la antena escuchó de verdad. Un canal sin
+  // medir se ve exactamente igual de vacío que uno limpio.
+  const usable = PREFERRED.filter(ch => scanned && scanned[ch] !== undefined);
+  if(!usable.length) return null;
+  const scored = usable.map(ch => ({
+    ch, frames: scanned[ch] || 0,
+    aps: (overlap[ch] && overlap[ch].aps) || 0,
+    nets: known[ch] || 0
+  }));
+  // Orden de castigo: primero el Wi-Fi, que arruina el canal de forma
+  // permanente; después una red Zigbee conocida, que lo comparte; y al final
+  // el tráfico suelto que el barrido alcanzó a oír.
+  scored.sort((a, b) => (a.aps - b.aps) || (a.nets - b.nets)
+                     || (a.frames - b.frames) || (a.ch - b.ch));
+  return scored[0];
+}
+
+function renderAnswer(){
+  const spec = STATE.spectrum || {}, wifi = STATE.wifi || {}, scanned = STATE.scanned || {};
+  const r = recommend(spec, wifi, scanned, STATE.census);
+  if(!r){
+    $("answer").innerHTML = '<div class="pending">'
+      + (Object.keys(scanned).length ? t("noPreferred") : t("noScan")) + '</div>';
+    return;
+  }
+  const why = (r.aps === 0 && r.frames === 0) ? t("clean")
+            : r.aps === 0 ? t("cleanWifi", {n:r.frames})
+            : t("noneFree", {n:r.aps});
+  const warn = r.nets ? '<p style="color:var(--warn)">' + esc(t("knownNet", {n:r.nets})) + '</p>' : '';
+  $("answer").innerHTML = '<div class="bigch">' + r.ch + '</div><div><h1>'
+    + t("useChannel") + ' ' + r.ch + '</h1><p>' + esc(why) + ' · ' + mhz(r.ch)
+    + ' MHz</p>' + warn + '</div>';
+}
+
+function renderChart(){
+  const spec = STATE.spectrum || {}, wifi = STATE.wifi || {}, scanned = STATE.scanned || {};
+  const overlap = (wifi && wifi.zigbee_overlap) || {};
+  const best = recommend(spec, wifi, scanned, STATE.census);
+  const known = knownNetworks(STATE.census);
+  const pick = best ? best.ch : null;
+  const hasSweep = Object.keys(scanned).length > 0;
+  const max = Math.max(1, ...CH.map(c =>
+    (scanned[c] !== undefined ? scanned[c] : (hasSweep ? 0 : ((spec[c] && spec[c].n) || 0)))));
+
+  const lo = 2400, hi = 2485, span = hi - lo;
+  let bands = "";
+  ((wifi.networks) || []).filter(n => n.band === "2.4" && n.lo).forEach(n => {
+    const l = Math.max(0, (n.lo - lo) / span * 100);
+    const w = Math.min(100 - l, (n.hi - n.lo) / span * 100);
+    bands += '<div class="wifiband" style="left:' + l.toFixed(1) + '%;width:' + w.toFixed(1)
+      + '%"><span>' + esc(n.ssid.slice(0, 14)) + ' · ch' + n.channel + '</span></div>';
+  });
+
+  let bars = "", axis = "";
+  CH.forEach(c => {
+    const measured = scanned[c] !== undefined;
+    // Con barrido, las barras son el barrido. El historico de capturas viejas
+    // pertenece a otro sitio y a otro dia: mezclarlo aqui le mostraria al
+    // tecnico trafico de la casa anterior.
+    const n = measured ? scanned[c] : (hasSweep ? 0 : ((spec[c] && spec[c].n) || 0));
+    const aps = (overlap[c] && overlap[c].aps) || 0;
+    const cls = !measured ? "unmeasured"
+              : (c === pick ? "pick" : ((aps || known[c]) ? "busy" : ""));
+    const h = n ? Math.max(6, Math.round(n / max * 100)) : 2;
+    bars += '<div class="slot ' + cls + '" title="' + t("ch") + ' ' + c + ' · ' + mhz(c)
+      + ' MHz · ' + (measured ? n + ' ' + t("frames") : t("legUnmeasured")) + ' · '
+      + aps + ' AP"><div class="bar" style="height:' + h + '%"></div></div>';
+    axis += '<div class="' + cls + '">' + c + '</div>';
+  });
+  $("chart").innerHTML = bands + '<div class="bars">' + bars + '</div><div class="axis">' + axis + '</div>';
+
+  const m = Object.keys(scanned).length;
+  const total = CH.reduce((a, c) => a + (scanned[c] || 0), 0);
+  const busy = CH.filter(c => scanned[c]).length + Object.keys(known).length;
+  $("chartHint").textContent = m ? t("chartMeasured", {m:m, b:busy, f:total}) : t("chartNone");
+}
+
+function renderCensus(){
+  const rows = STATE.census || [];
+  if(!rows.length){ $("census").innerHTML = '<div class="empty">' + t("censusEmpty") + '</div>'; return; }
+  let h = '<table><tr><th>' + t("ch") + '</th><th>' + t("pan") + '</th><th>'
+    + t("signal") + '</th><th>' + t("network") + '</th></tr>';
+  rows.forEach(r => {
+    let tags = "";
+    for(const v in (r.vendors || {})){
+      const ok = r.vendors[v];
+      tags += '<span class="tag ' + (ok ? "brand" : "q") + '">' + esc(v) + (ok ? "" : " ?") + '</span>';
+    }
+    if(r.permit_join) tags += '<span class="tag risk">' + t("permitOpen") + '</span>';
+    if(r.zigbee === false) tags += '<span class="tag q">' + t("notZigbee") + '</span>';
+    if(r.device_count) tags += '<span class="tag">' + r.device_count + ' ' + t("devices") + '</span>';
+    else if(r.frames) tags += '<span class="tag q">' + t("noBrand") + '</span>';
+    if(!r.beacons) tags += '<span class="tag q">' + t("noBeacon") + '</span>';
+    h += '<tr><td class="mono">' + (r.channel == null ? "?" : r.channel) + '</td>'
+      + '<td class="mono">' + esc(r.pan || "?") + '</td>'
+      + '<td>' + sigHTML(r.best_rssi) + '</td>'
+      + '<td>' + (tags || '<span class="tag q">' + t("unidentified") + '</span>') + '</td></tr>';
+  });
+  $("census").innerHTML = h + '</table>';
+}
+
+function renderWifi(){
+  const w = STATE.wifi || {};
+  if(w.pending){ $("wifi").innerHTML = '<div class="empty">' + t("wifiScanning") + '</div>'; return; }
+  if(!w.ok){
+    const key = WIFI_NOTE_KEYS[w.note_code];
+    $("wifi").innerHTML = '<div class="empty">' + esc(key ? t(key) : (w.note || t("wifiNone"))) + '</div>';
+    return;
+  }
+  let h = '<table><tr><th>' + t("band") + '</th><th>' + t("aps") + '</th><th>'
+    + t("channels") + '</th></tr>';
+  ["2.4", "5", "6"].forEach(b => {
+    const d = (w.bands || {})[b];
+    if(!d) return;
+    const chans = Object.keys(d.channels).sort((a, c) => a - c)
+      .map(c => "ch" + c + (d.channels[c] > 1 ? "×" + d.channels[c] : "")).join(" · ");
+    h += '<tr><td class="mono">' + b + ' GHz</td><td class="mono">' + d.aps
+      + '</td><td class="mono" style="color:var(--muted)">' + esc(chans) + '</td></tr>';
+  });
+  h += '</table>';
+  if(w.recommend && w.recommend.channel)
+    h += '<p class="hint" style="color:var(--muted)">'
+      + t("wifiRec", {c:w.recommend.channel, n:w.recommend.aps}) + '</p>';
+  $("wifi").innerHTML = h;
+}
+
+function renderVerdict(){
+  const v = STATE.verdict || {};
+  const keys = Object.keys(v);
+  if(!keys.length){ $("verdict").innerHTML = '<div class="empty">' + t("verdictEmpty") + '</div>'; return; }
+  const color = {interference:"var(--warn)", mesh:"var(--violet)", ok:"var(--mint)",
+                 watch:"var(--warn)", unknown:"var(--dim)"};
+  // El veredicto se arma acá a partir del nivel y los números que manda el
+  // backend. El servidor no redacta: si redactara, el texto quedaría en un solo
+  // idioma y habría que tocar Python para traducirlo.
+  const overlap = ((STATE.wifi || {}).zigbee_overlap) || {};
+  let h = "";
+  keys.sort((a, b) => a - b).forEach(ch => {
+    const s = v[ch];
+    const aps = (overlap[ch] && overlap[ch].aps) || 0;
+    const rate = (s.retry_rate * 100).toFixed(0);
+    const vars = {rate:rate, fps:s.fps.toFixed(1),
+                  aps: aps ? t("vApsOver", {n:aps}) : ""};
+    const key = {unknown:"vUnknown", interference:"vInterference", mesh:"vMesh",
+                 watch:"vWatch", ok:"vOk"}[s.level] || "vUnknown";
+    h += '<div style="padding:14px 0;border-bottom:1px solid var(--line)">'
+      + '<div style="font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim)">'
+      + t("ch") + ' ' + ch + ' · ' + s.data + ' ' + t("vData") + ' · ' + s.retries + ' '
+      + t("vRetries") + ' · ' + rate + '%</div>'
+      + '<div style="font-size:16px;font-weight:600;letter-spacing:-.3px;margin:6px 0 4px;color:'
+      + (color[s.level] || "var(--fg)") + '">' + esc(t(key)) + '</div>'
+      + '<div style="color:var(--muted);font-size:13.5px;max-width:720px">'
+      + esc(t(key + "D", vars)) + '</div></div>';
+  });
+  $("verdict").innerHTML = h;
+}
+
+function renderCaps(){
+  const caps = STATE.captures || [];
+  // Los campos son los que sirve /api/state: path y bytes.
+  $("caps").innerHTML = caps.length
+    ? caps.map(c => '<div class="cap' + (c.path === PICKED ? " on" : "") + '" data-rel="'
+        + esc(c.path) + '"><span>' + esc(c.display_name || c.name) + '</span><small>'
+        + (c.frames != null ? c.frames + ' ' + t("frames") + ' · ' : '')
+        + Math.round((c.bytes || 0) / 1024) + ' kB</small></div>').join("")
+    : '<div class="empty">' + t("noCaptures") + '</div>';
+  $("caps").querySelectorAll(".cap").forEach(el => {
+    el.onclick = () => { PICKED = el.dataset.rel; renderCaps(); loadFrames(PICKED); };
+  });
+}
+
+async function loadFrames(rel){
+  showFramesKey("decoding");
+  try{
+    const res = await fetch("/api/capture/" + rel);
+    const d = await res.json();
+    // Decir qué falló, no que algo falló.
+    if(!res.ok || d.error){
+      FRAMES_MESSAGE = null;
+      $("frames").innerHTML = '<div class="empty">' + t("readFail") + ' <b>' + esc(rel)
+        + '</b> — HTTP ' + res.status + ': ' + esc(backendText(d.error_code, d.error)) + '</div>';
+      return;
+    }
+    const rows = d.rows || [];
+    $("frameOf").textContent = rel;
+    if(!rows.length){
+      showFramesKey(NOTE_KEYS[d.note_code] || "noFrames");
+      return;
+    }
+    FRAMES_MESSAGE = null;
+    let h = '<table><tr><th>t</th><th>' + t("ch") + '</th><th>' + t("signal") + '</th><th>'
+      + t("type") + '</th><th>' + t("source") + '</th><th>' + t("dest") + '</th><th>'
+      + t("detail") + '</th></tr>';
+    rows.slice(0, 300).forEach(r => {
+      h += '<tr><td class="mono">' + r.t + '</td><td class="mono">' + (r.ch == null ? "" : r.ch)
+        + '</td><td>' + sigHTML(r.rssi) + '</td>'
+        + '<td>' + esc(r.type) + (r.secured ? ' <span class="tag q">' + t("encrypted") + '</span>' : '')
+        + '</td><td class="mono">' + esc(r.src) + (r.c4 ? ' <span class="tag brand">C4</span>' : '')
+        + '</td><td class="mono">' + esc(r.dst) + '</td><td>' + esc(r.detail) + '</td></tr>';
+    });
+    $("frames").innerHTML = h + '</table>';
+  }catch(e){
+    FRAMES_MESSAGE = null;
+    $("frames").innerHTML = '<div class="empty">' + t("readFail") + ': ' + esc(e.message || e) + '</div>';
+  }
+}
+
+/* ---------- progreso ---------- */
+// El barrido tarda dos minutos. Sin señal de avance el técnico cree que no pasó
+// nada y lo vuelve a apretar.
+function showProgress(job){
+  if(!job){ $("progress").hidden = true; return; }
+  $("progress").hidden = false;
+  const lines = job.lines || [];
+  // Las filas del barrido salen como "  15   2425       0"
+  const done = lines.filter(l => /^\s*\d{2}\s+\d{4}\s/.test(l));
+  const last = done.length ? done[done.length - 1].trim().split(/\s+/)[0] : null;
+  if(job.kind === "capture"){
+    $("progTitle").textContent = t("capturingCh", {c:$("snCh").value});
+    $("progFill").style.width = "100%";
+    $("progSub").textContent = t("elapsed", {s:Math.round(job.elapsed || 0)});
+    return;
+  }
+  $("progTitle").textContent = t("scanningCh");
+  $("progFill").style.width = Math.round(done.length / 16 * 100) + "%";
+  $("progSub").textContent = (last ? t("channelOf", {c:last, i:done.length, n:16}) + " · " : "")
+    + t("elapsed", {s:Math.round(job.elapsed || 0)});
+}
+
+async function poll(id){
+  try{
+    const j = await (await fetch("/api/job/" + id)).json();
+    if(j.lines && j.lines.length) showLogRaw(j.lines.join("\n"));
+    showProgress(j);
+    if(j.status === "running"){ setTimeout(function(){ poll(id); }, 900); }
+    else { JOB = null; showProgress(null); refresh(); }
+  }catch(e){ JOB = null; showProgress(null); }
+}
+
+async function start(url, body){
+  try{
+    const payload = Object.assign({}, body || {}, {lang:LANG});
+    const r = await fetch(url, {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(payload)});
+    const j = await r.json();
+    if(j.error){
+      const key = ERROR_KEYS[j.error_code];
+      if(key) showLogKey(key); else showLogRaw(j.error);
+      mode("analisis"); return;
+    }
+    JOB = j.id;
+    showLogKey("starting");
+    showProgress({kind:j.kind, lines:[], elapsed:0});
+    poll(j.id);
+  }catch(e){ showLogKey("cantStart"); }
+}
+$("btnScan").onclick = function(){ start("/api/scan", {dwell:6}); };
+$("btnSniff").onclick = function(){
+  start("/api/sniff", {channel:+$("snCh").value, seconds:+$("snSec").value});
+};
+
+function renderAll(){
+  renderAnswer(); renderChart(); renderCensus(); renderWifi(); renderVerdict(); renderCaps();
+}
+
+async function refresh(){
+  try{ STATE = await (await fetch("/api/state")).json(); }catch(e){ return; }
+  const b = STATE.board || {};
+  $("led").className = "led " + (b.port ? "ok" : "no");
+  $("portTxt").innerHTML = b.port
+    ? t("antenna") + ' <b>' + esc(b.port.replace("/dev/", "")) + '</b>'
+    : esc(BOARD_KEYS[b.role_code] ? t(BOARD_KEYS[b.role_code]) : (b.role_detail || t("noAntenna")));
+  const off = STATE.busy || !b.port;
+  $("btnScan").disabled = off;
+  $("btnSniff").disabled = off;
+  $("btnScan").textContent = STATE.busy ? t("scanning") : t("scan");
+  renderAll();
+}
+
+applyLang();
+refresh();
+setInterval(function(){ if(!JOB) refresh(); }, 5000);
+</script>
+</body></html>

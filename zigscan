@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+#
+# zigscan — Zigbee site survey for AV integrators.
+#
+# One entry point so a technician has one thing to remember.
+#
+#   ./zigscan survey             abre la consola (la normal)
+#   ./zigscan scan [seg]         barre los 16 canales desde la terminal
+#   ./zigscan census             quién ya está en el aire, y de qué marca
+#   ./zigscan verdict            ¿interferencia o malla? se lee de una captura
+#   ./zigscan wifi               Wi-Fi medido, todas las bandas
+#   ./zigscan identify           qué antena hay y con qué firmware
+#   ./zigscan capture <ch> <s>   graba un canal a pcap
+#   ./zigscan report <file>      tramas y RSSI de un pcap
+
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY="$HERE/.venv/bin/python"
+
+CMD="${1:-survey}"
+shift || true
+
+# Help must work before setup — it is the first thing someone types.
+if [[ "$CMD" == "-h" || "$CMD" == "--help" || "$CMD" == "help" ]]; then
+  sed -n '5,14p' "$0" | sed 's/^# \{0,1\}//'
+  exit 0
+fi
+
+if [[ ! -x "$PY" ]]; then
+  echo "Not set up yet. Run ./setup.sh first." >&2
+  exit 1
+fi
+
+case "$CMD" in
+  survey|console|ui)
+    exec "$PY" "$HERE/tools/console.py" --open "$@"
+    ;;
+  scan)
+    exec "$PY" "$HERE/tools/capture.py" "$@"
+    ;;
+  identify|id)
+    exec "$PY" "$HERE/tools/identify.py" "$@"
+    ;;
+  capture|sniff)
+    exec "$PY" "$HERE/tools/capture.py" capture "$@"
+    ;;
+  census)
+    exec "$PY" "$HERE/tools/census.py" "$@"
+    ;;
+  verdict|diag)
+    exec "$PY" "$HERE/tools/verdict.py" "$@"
+    ;;
+  wifi)
+    exec "$PY" "$HERE/tools/wifi.py" "$@"
+    ;;
+  report|summary)
+    exec "$PY" "$HERE/tools/pcap_summary.py" "$@"
+    ;;
+  convert)
+    exec "$PY" "$HERE/tools/pcap_convert.py" "$@"
+    ;;
+  *)
+    echo "Unknown command: $CMD" >&2
+    echo "Try: ./zigscan help" >&2
+    exit 2
+    ;;
+esac

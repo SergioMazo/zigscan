@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a reproducible ZigScan problem
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach customer PCAPs or unredacted network identifiers. Reproduce with a temporary network when possible.
+  - type: input
+    id: version
+    attributes:
+      label: ZigScan version
+      placeholder: v0.3.0
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Sniffer hardware and firmware
+      placeholder: Electronic Cats CatSniffer v3.1, TI Sniffer 1.10.0
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual result
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs or screenshots
+      description: Remove SSIDs, PAN IDs, addresses, serial numbers and customer details.
